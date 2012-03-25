@@ -238,6 +238,7 @@ Function ParseVideoMedia(videoItem) As Object
 			part.id = MediaPart@id
 			part.key = MediaPart@key
             part.postURL = MediaPart@postURL
+            part.file = MediaPart@file
 			part.streams = CreateObject("roArray", 5, true)
             part.subtitles = invalid
 			for each StreamItem in MediaPart.Stream
