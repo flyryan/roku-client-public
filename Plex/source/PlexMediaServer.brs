@@ -32,7 +32,7 @@ Function newPlexMediaServer(pmsUrl, pmsName, machineID) As Object
     pms.ConstructVideoItem = pmsConstructVideoItem
     pms.TranscodingVideoUrl = TranscodingVideoUrl
     pms.TranscodingAudioUrl = TranscodingAudioUrl
-    pms.ConvertTranscodeURLToLoopback = ConvertTranscodeURLToLoopback
+    pms.ConvertURLToLoopback = ConvertURLToLoopback
     pms.AddDirectPlayInfo = pmsAddDirectPlayInfo
     pms.Log = pmsLog
 
@@ -261,7 +261,7 @@ Function pmsConstructVideoItem(item, seekValue, allowDirectPlay, forceDirectPlay
                 for each token in tokens
                     arr = strTokenize(token, "=")
                     value = {}
-                    value[arr[0]] = arr[1]
+                    value[arr[0]] = firstOf(arr[1], " ")
                     headers.Push(value)
                     Debug("Indirect video item header: " + tostr(value))
                 next
@@ -456,15 +456,11 @@ Function FullUrl(serverUrl, sourceUrl, key) As String
     return finalUrl
 End Function
 
-Function ResolveUrl(serverUrl As String, sourceUrl As String, uri As String) As String
-    return FullUrl(serverUrl, sourceUrl, uri)
-End Function
-
 
 '* Constructs an image based on a PMS url with the specific width and height. 
 Function TranscodedImage(queryUrl, imagePath, width, height) As String
     imageUrl = FullUrl(m.serverUrl, queryUrl, imagePath)
-    imageUrl = m.ConvertTranscodeURLToLoopback(imageUrl)
+    imageUrl = m.ConvertURLToLoopback(imageUrl)
     encodedUrl = HttpEncode(imageUrl)
     image = m.serverUrl + "/photo/:/transcode?url="+encodedUrl+"&width="+width+"&height="+height
     return image
@@ -495,13 +491,13 @@ Function TranscodingVideoUrl(videoUrl As String, item As Object, httpHeaders As 
         ratingKey = item.ratingKey
     end if
 
-    location = ResolveUrl(m.serverUrl, item.sourceUrl, videoUrl)
-    location = m.ConvertTranscodeURLToLoopback(location)
+    location = FullUrl(m.serverUrl, item.sourceUrl, videoUrl)
+    location = m.ConvertURLToLoopback(location)
     Debug("Location: " + tostr(location))
     if len(key) = 0 then
         fullKey = ""
     else
-        fullKey = ResolveUrl(m.serverUrl, item.sourceUrl, key)
+        fullKey = m.ConvertURLToLoopback(FullUrl(m.serverUrl, item.sourceUrl, key))
     end if
     Debug("Original key: " + tostr(key))
     Debug("Full key: " + tostr(fullKey))
@@ -527,10 +523,13 @@ Function TranscodingVideoUrl(videoUrl As String, item As Object, httpHeaders As 
         query = query + "&quality=" + currentQuality
     end if
 
-    ' Forcing a longer segment size mitigates some Roku 2 weirdness. The
-    ' initial loading is faster (at least on some builds), and the visual
-    ' artifacts and audio glitches are less frequent.
-    query = query + "&secondsPerSegment=10"
+    ' Forcing longer segment sizes usually mitigates some Roku 2 weirdness
+    ' and makes videos load faster. Depending on the speed of the network
+    ' and transcoding server though, it could be slower in some cases.
+    segmentLength = RegRead("segment_length", "preferences", "10")
+    if segmentLength <> "auto" then
+        query = query + "&secondsPerSegment=" + segmentLength
+    end if
 
     query = query + "&url=" + HttpEncode(location)
     query = query + "&3g=0"
@@ -547,9 +546,13 @@ Function TranscodingVideoUrl(videoUrl As String, item As Object, httpHeaders As 
         next
     next
 
-    ' TODO(schuyler): The subtitle size for burned in subs should be configurable,
-    ' but in the meantime, ask for something a little bigger than the default.
-    query = query + "&subtitleSize=125"
+    subtitleSize = RegRead("subtitle_size", "preferences", "125")
+    query = query + "&subtitleSize=" + subtitleSize
+
+    audioBoost = RegRead("audio_boost", "preferences", "100")
+    if audioBoost <> "100" then
+        query = query + "&audioBoost=" + audioBoost
+    end if
 
     publicKey = "KQMIY6GATPC63AIMC4R2"
     time = LinuxTime().tostr()
@@ -571,8 +574,8 @@ Function TranscodingAudioUrl(audioUrl As String, item As Object)
 
     Debug("Constructing transcoding audio URL for " + audioUrl)
 
-    location = ResolveUrl(m.serverUrl, item.sourceUrl, audioUrl)
-    location = m.ConvertTranscodeURLToLoopback(location)
+    location = FullUrl(m.serverUrl, item.sourceUrl, audioUrl)
+    location = m.ConvertURLToLoopback(location)
     Debug("Location: " + tostr(location))
     
     path = "/music/:/transcode/generic.mp3?"
@@ -592,7 +595,7 @@ Function TranscodingAudioUrl(audioUrl As String, item As Object)
     return finalUrl
 End Function
 
-Function ConvertTranscodeURLToLoopback(url) As String
+Function ConvertURLToLoopback(url) As String
     ' If the URL starts with our serverl URL, replace it with
     ' 127.0.0.1:32400.
 

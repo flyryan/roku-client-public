@@ -111,14 +111,16 @@ Function videoHandleMessage(msg) As Boolean
 
             if screen.Changes.DoesExist("quality") then
                 RegWrite("quality", screen.Changes["quality"], "preferences")
-                m.metadata.preferredMediaItem = PickMediaItem(m.metadata.media)
+                m.metadata.preferredMediaItem = PickMediaItem(m.metadata.media, m.metadata.HasDetails)
             end if
 
             if screen.Changes.DoesExist("audio") then
+                m.media.canDirectPlay = invalid
                 server.UpdateAudioStreamSelection(m.media.preferredPart.id, screen.Changes["audio"])
             end if
 
             if screen.Changes.DoesExist("subtitles") then
+                m.media.canDirectPlay = invalid
                 server.UpdateSubtitleStreamSelection(m.media.preferredPart.id, screen.Changes["subtitles"])
             end if
 
@@ -235,7 +237,7 @@ Sub playVideo(seekValue=0, directPlayOptions=0)
         dialog.Show()
 
         if m.OrigQuality <> dialog.Quality then
-            m.metadata.preferredMediaItem = PickMediaItem(m.metadata.media)
+            m.metadata.preferredMediaItem = PickMediaItem(m.metadata.media, m.metadata.HasDetails)
             m.OrigQuality = dialog.Quality
         end if
     end if
@@ -275,6 +277,11 @@ Function videoCanDirectPlay(mediaItem) As Boolean
         return false
     end if
 
+    if mediaItem.canDirectPlay <> invalid then
+        return mediaItem.canDirectPlay
+    end if
+    mediaItem.canDirectPlay = false
+
     if mediaItem.preferredPart <> invalid AND mediaItem.preferredPart.subtitles <> invalid then
         subtitleStream = mediaItem.preferredPart.subtitles
         subtitleFormat = firstOf(subtitleStream.codec, "")
@@ -301,7 +308,7 @@ Function videoCanDirectPlay(mediaItem) As Boolean
         for each stream in mediaItem.preferredPart.streams
             if stream.streamType = "2" then
                 numAudioStreams = numAudioStreams + 1
-                if stream.channels = "2" then
+                if stream.channels = "2" OR stream.channels = "1" then
                     if stereoCodec = invalid then
                         stereoCodec = stream.codec
                     else if stream.selected <> invalid then
@@ -313,6 +320,8 @@ Function videoCanDirectPlay(mediaItem) As Boolean
                     else if stream.selected <> invalid then
                         secondaryStreamSelected = true
                     end if
+                else
+                    Debug("Unexpected channels on audio stream: " + tostr(stream.channels))
                 end if
             end if
         next
@@ -360,10 +369,12 @@ Function videoCanDirectPlay(mediaItem) As Boolean
         end if
 
         if device.hasFeature("5.1_surround_sound") AND surroundCodec <> invalid AND surroundCodec = "ac3" then
+            mediaItem.canDirectPlay = true
             return true
         end if
 
         if stereoCodec <> invalid AND (stereoCodec = "aac" OR stereoCodec = "ac3") then
+            mediaItem.canDirectPlay = true
             return true
         end if
 
@@ -386,6 +397,7 @@ Function videoCanDirectPlay(mediaItem) As Boolean
             return false
         end if
 
+        mediaItem.canDirectPlay = true
         return true
     end if
 
@@ -406,10 +418,12 @@ Function videoCanDirectPlay(mediaItem) As Boolean
         end if
 
         if device.hasFeature("5.1_surround_sound") AND surroundCodec <> invalid AND surroundCodec = "ac3" then
+            mediaItem.canDirectPlay = true
             return true
         end if
 
         if stereoCodec <> invalid AND (stereoCodec = "aac" OR stereoCodec = "ac3" OR stereoCodec = "mp3") then
+            mediaItem.canDirectPlay = true
             return true
         end if
 
@@ -428,6 +442,7 @@ Function videoCanDirectPlay(mediaItem) As Boolean
             return false
         end if
 
+        mediaItem.canDirectPlay = true
         return true
     end if
 
@@ -560,6 +575,9 @@ Function createVideoOptionsScreen(item, viewController) As Object
         { title: "3.0 Mbps, 720p", EnumValue: "7" },
         { title: "4.0 Mbps, 720p", EnumValue: "8" },
         { title: "8.0 Mbps, 1080p", EnumValue: "9"}
+        { title: "10.0 Mbps, 1080p", EnumValue: "10" }
+        { title: "12.0 Mbps, 1080p", EnumValue: "11" }
+        { title: "20.0 Mbps, 1080p", EnumValue: "12" }
     ]
     obj.Prefs["quality"] = {
         values: qualities,
@@ -700,25 +718,48 @@ Function shouldUseSoftSubs(stream) As Boolean
     if stream.codec <> "srt" then return false
 
     ' TODO(schuyler) If Roku adds support for non-Latin characters, remove
-    ' this hackery. If people start complaining about other languages, add
-    ' to this hackery.
+    ' this hackery. To the extent that we continue using this hackery, it
+    ' seems that the Roku requires UTF-8 subtitles but only supports characters
+    ' from Windows-1252. This should be the full set of languages that are
+    ' completely representable in Windows-1252. PMS should specifically be
+    ' returning ISO 639-2/B language codes.
 
-    if m.HardSubLanguages = invalid then
-        m.HardSubLanguages = {
-            ara: 1,
-            chi: 1,
-            gre: 1,
-            heb: 1,
-            hin: 1,
-            jpn: 1,
-            kor: 1,
-            rus: 1,
-            yid: 1
+    if m.SoftSubLanguages = invalid then
+        m.SoftSubLanguages = {
+            afr: 1,
+            alb: 1,
+            baq: 1,
+            bre: 1,
+            cat: 1,
+            dan: 1,
+            eng: 1,
+            fao: 1,
+            glg: 1,
+            ger: 1,
+            ice: 1,
+            may: 1,
+            gle: 1,
+            ita: 1,
+            lat: 1,
+            ltz: 1,
+            nor: 1,
+            oci: 1,
+            por: 1,
+            roh: 1,
+            gla: 1,
+            spa: 1,
+            swa: 1,
+            swe: 1,
+            wln: 1,
+            est: 1,
+            fin: 1,
+            fre: 1,
+            dut: 1
         }
     end if
 
-    if stream.languageCode <> invalid AND m.HardSubLanguages.DoesExist(stream.languageCode) then return false
+    if stream.languageCode = invalid OR m.SoftSubLanguages.DoesExist(stream.languageCode) then return true
 
-    return true
+    return false
 End Function
 
