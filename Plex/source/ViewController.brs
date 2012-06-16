@@ -68,7 +68,7 @@ Function vcCreateScreenForItem(context, contextIndex, breadcrumbs, show=true) As
         if RegRead("use_poster_for_series", "preferences", "") <> "" then
             screen = createPosterScreen(item, m)
         else
-            screen = createGridScreenForItem(item, m, "flat-16x9")
+            screen = createGridScreenForItem(item, m, "flat-16X9")
         end if
     else if contentType = "artist" then
         ' TODO: Poster, poster with filters, or grid?
