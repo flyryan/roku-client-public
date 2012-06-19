@@ -7,7 +7,7 @@ Function createPaginatedLoader(container, initialLoadSize, pageSize)
 
     ' Reorder container sections so that frequently accessed sections
     ' are displayed first.
-    priorityKeys = RegRead("priority_keys", "preferences", "newest,recentlyAdded,recentlyViewedShows,onDeck,all").Tokenize(",")
+    priorityKeys = RegRead("priority_keys", "preferences", "newest,recentlyAdded,recentlyViewedShows,onDeck,all,unwatched").Tokenize(",")
     for each key in priorityKeys
         container.MoveKeyToHead(key)
     next
