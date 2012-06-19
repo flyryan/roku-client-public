@@ -47,6 +47,7 @@ Function createHomeScreen(viewController) As Object
 
     obj.ChannelsRow = obj.CreateRow("Channels")
     obj.SectionsRow = obj.CreateRow("Library Sections")
+    obj.RecentsRow = obj.CreateRow("Recently Added")
     obj.QueueRow = obj.CreateRow("Queue")
     obj.SharedSectionsRow = obj.CreateRow("Shared Library Sections")
     obj.MiscRow = obj.CreateRow("Miscellaneous")
@@ -130,6 +131,12 @@ Sub homeCreateServerRequests(server As Object, startRequests As Boolean, refresh
     channels = CreateObject("roAssociativeArray")
     channels.server = server
     channels.key = "/channels/recentlyViewed"
+
+    ' Request recently added
+    recents = CreateObject("roAssociativeArray")
+    recents.server = server
+    recents.key = "/library/recentlyAdded"
+    m.AddOrStartRequest(recents, m.RecentsRow, startRequests)
 
     allChannels = CreateObject("roAssociativeArray")
     allChannels.Title = "More Channels"
@@ -257,6 +264,7 @@ Sub refreshHomeScreen(changes)
         else
             m.RemoveFromRowIf(m.SectionsRow, IsMyPlexServer)
             m.RemoveFromRowIf(m.ChannelsRow, IsMyPlexServer)
+            m.RemoveFromRowIf(m.RecentsRow, IsMyPlexServer)
             m.RemoveFromRowIf(m.MiscRow, IsMyPlexServer)
             m.RemoveFromRowIf(m.QueueRow, AlwaysTrue)
             m.RemoveFromRowIf(m.SharedSectionsRow, AlwaysTrue)
@@ -290,6 +298,7 @@ Sub refreshHomeScreen(changes)
         if didRemove then
             m.RemoveFromRowIf(m.SectionsRow, IsInvalidServer)
             m.RemoveFromRowIf(m.ChannelsRow, IsInvalidServer)
+            m.RemoveFromRowIf(m.RecentsRow, IsInvalidServer)
             m.RemoveFromRowIf(m.MiscRow, IsInvalidServer)
         end if
     end if
@@ -514,6 +523,8 @@ Function homeHandleMessage(msg) As Boolean
                 else if item.Type = "movie" then
                     item.ShortDescriptionLine2 = "Movie section" + serverStr
                 else if item.Type = "show" then
+                    item.ShortDescriptionLine2 = "TV section" + serverStr
+                else if item.Type = "season" then
                     item.ShortDescriptionLine2 = "TV section" + serverStr
                 else if item.Type = "artist" then
                     item.ShortDescriptionLine2 = "Music section" + serverStr
@@ -804,11 +815,13 @@ Sub homeRefreshData()
     ' Refresh the queue
     m.CreateQueueRequests(true)
 
-    ' Refresh the sections and channels for all of our owned servers
+    ' Refresh the sections, recents, and channels for all of our owned servers
     m.contentArray[m.SectionsRow].refreshContent = []
     m.contentArray[m.SectionsRow].loadedServers.Clear()
     m.contentArray[m.ChannelsRow].refreshContent = []
     m.contentArray[m.ChannelsRow].loadedServers.Clear()
+    m.contentArray[m.RecentsRow].refreshContent = []
+    m.contentArray[m.RecentsRow].loadedServers.Clear()
     for each server in GetOwnedPlexMediaServers()
         m.CreateServerRequests(server, true, true)
     next
