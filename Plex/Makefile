@@ -17,7 +17,7 @@
 ##########################################################################  
 APPNAME = Plex
 APPDEPS = manifest
-ZIP_EXCLUDE = -x .git\* -x manifest.template -x \*.swp -x \*.DS_Store
+ZIP_EXCLUDE = -x .git\* -x manifest.template -x \*.swp -x \*.DS_Store -x \*.py
 include ../app.mk
 
 APPTITLE = PlexDev
@@ -43,5 +43,9 @@ manifest:
 screenshot:
 	curl -s -F passwd= -F mysubmit=Screenshot -F "archive=;filename=" -H "Expect:" "http://$(ROKU_DEV_TARGET)/plugin_inspect" > /dev/null
 	curl -s "http://$(ROKU_DEV_TARGET)/pkgs/dev.jpg" > roku_screenshot.jpg
+
+download: $(APPNAME)
+	echo "Uploading latest package to GitHub"
+	./create_github_download.py $(ZIPREL)/$(APPNAME).zip
 
 all: $(APPNAME)
