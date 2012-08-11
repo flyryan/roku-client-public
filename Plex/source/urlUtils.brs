@@ -32,10 +32,19 @@ Function CreateURLTransferObject(url As String) as Object
     obj.SetPort(CreateObject("roMessagePort"))
     obj.SetUrl(url)
     obj.AddHeader("Content-Type", "application/x-www-form-urlencoded")
-	obj.AddHeader("X-Plex-Client-Platform", "Roku")
+    AddPlexHeaders(obj)
     obj.EnableEncodings(true)
     return obj
 End Function
+
+Sub AddPlexHeaders(transferObj, token=invalid)
+    transferObj.AddHeader("X-Plex-Client-Platform", "Roku")
+    transferObj.AddHeader("X-Plex-Version", GetGlobal("appVersionStr"))
+
+    if token <> invalid then
+        transferObj.AddHeader("X-Plex-Token", token)
+    end if
+End Sub
 
 
 REM ******************************************************
@@ -223,6 +232,9 @@ Function GetToStringWithTimeout(request As Object, seconds as Integer) as String
         event = wait(timeout%, request.GetPort())
         if type(event) = "roUrlEvent"
             str = event.GetString()
+            if event.GetResponseCode() <> 200 then
+                Debug("GET returned: " + tostr(event.GetResponseCode()) + " - " + event.GetFailureReason())
+            end if
         elseif event = invalid
             Dbg("AsyncGetToString timeout")
             request.AsyncCancel()

@@ -18,6 +18,15 @@ Sub Main(args)
         end if
     next
 
+    ' If necessary, restore the direct play preference. It's possible for a
+    ' temporary value to persist if the video player crashes.
+    directPlay = RegRead("directplay_restore", "preferences")
+    if directPlay <> invalid then
+        Debug("Restoring direct play options to: " + tostr(directPlay))
+        RegWrite("directplay", directPlay, "preferences")
+        RegDelete("directplay_restore", "preferences")
+    end if
+
     'initialize theme attributes like titles, logos and overhang color
     initTheme()
 
@@ -82,14 +91,26 @@ Sub initGlobals()
     ' Play these videos, and tell the transcoder that we don't support them.
     ' It doesn't appear to matter how the Roku is configured, even if the
     ' display type is set to 16:9 Anamorphic the videos are distorted.
-    ' On the Roku 2, meanwhile, the problems still seem to exist if the
-    ' display type is non-HD.
+    ' On the Roku 2, support was somewhat murkier, but 4.8 is intended to
+    ' fix things.
 
     Debug("Display type: " + tostr(device.GetDisplayType()))
 
-    playsAnamorphic = major >= 4 AND device.GetDisplayType() = "HDTV"
+    playsAnamorphic = major > 4 OR (major = 4 AND (minor >= 8 OR device.GetDisplayType() = "HDTV"))
     Debug("Anamorphic support: " + tostr(playsAnamorphic))
     GetGlobalAA().AddReplace("playsAnamorphic", playsAnamorphic)
+
+    ' Support for ReFrames seems mixed. These numbers could be wrong, but
+    ' there are reports that the Roku 1 can't handle more than 5 ReFrames,
+    ' and testing has shown that the video is black beyond that point. The
+    ' Roku 2 has been observed to play all the way up to 16 ReFrames, but
+    ' on at least one test video there were noticeable artifacts as the
+    ' number increased, starting with 8.
+    if major >= 4 then
+        GetGlobalAA().AddReplace("maxRefFrames", 8)
+    else
+        GetGlobalAA().AddReplace("maxRefFrames", 5)
+    end if
 End Sub
 
 Function GetGlobal(var, default=invalid)

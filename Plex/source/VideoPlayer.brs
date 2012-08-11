@@ -149,10 +149,15 @@ Sub playVideo(seekValue=0, directPlayOptions=0)
 	Debug("MediaPlayer::playVideo: Displaying video: " + tostr(metadata.title))
 	seconds = int(seekValue/1000)
 
+    if (metadata.preferredMediaItem <> invalid AND metadata.preferredMediaItem.forceTranscode <> invalid) AND (directPlayOptions <> 1 AND directPlayOptions <> 2) then
+        directPlayOptions = 4
+    end if
+
     origDirectPlayOptions = RegRead("directplay", "preferences", "0")
     if origDirectPlayOptions <> directPlayOptions.tostr() then
         Debug("Temporarily overwriting direct play preference to: " + tostr(directPlayOptions))
         RegWrite("directplay", directPlayOptions.tostr(), "preferences")
+        RegWrite("directplay_restore", origDirectPlayOptions, "preferences")
         Capabilities(true)
     else
         origDirectPlayOptions = invalid
@@ -169,8 +174,10 @@ Sub playVideo(seekValue=0, directPlayOptions=0)
         videoPlayer.SetMessagePort(port)
         videoPlayer.SetContent(videoItem)
 
-        if server.AccessToken <> invalid then
-            videoPlayer.AddHeader("X-Plex-Token", server.AccessToken)
+        ' If we're playing the video from the server, add appropriate X-Plex
+        ' headers.
+        if server.IsRequestToServer(videoItem.StreamUrls[0]) then
+            AddPlexHeaders(videoPlayer, server.AccessToken)
         end if
 
         if videoItem.IsTranscoded then
@@ -220,6 +227,7 @@ Sub playVideo(seekValue=0, directPlayOptions=0)
     if origDirectPlayOptions <> invalid then
         Debug("Restoring direct play options to: " + tostr(origDirectPlayOptions))
         RegWrite("directplay", origDirectPlayOptions, "preferences")
+        RegDelete("directplay_restore", "preferences")
         Capabilities(true)
     end if
 
@@ -304,6 +312,7 @@ Function videoCanDirectPlay(mediaItem) As Boolean
     surroundCodec = invalid
     secondaryStreamSelected = false
     numAudioStreams = 0
+    videoStream = invalid
     if mediaItem.preferredPart <> invalid then
         for each stream in mediaItem.preferredPart.streams
             if stream.streamType = "2" then
@@ -323,6 +332,8 @@ Function videoCanDirectPlay(mediaItem) As Boolean
                 else
                     Debug("Unexpected channels on audio stream: " + tostr(stream.channels))
                 end if
+            elseif stream.streamType = "1" AND videoStream = invalid then
+                videoStream = stream
             end if
         next
     end if
@@ -368,6 +379,14 @@ Function videoCanDirectPlay(mediaItem) As Boolean
             return false
         end if
 
+        if videoStream <> invalid AND firstOf(videoStream.refFrames, "0").toInt() > GetGlobal("maxRefFrames", 0) then
+            ' Not only can we not Direct Play, but we want to make sure we
+            ' don't try to Direct Stream.
+            mediaItem.forceTranscode = true
+            Debug("videoCanDirectPlay: too many ReFrames: " + tostr(videoStream.refFrames))
+            return false
+        end if
+
         if device.hasFeature("5.1_surround_sound") AND surroundCodec <> invalid AND surroundCodec = "ac3" then
             mediaItem.canDirectPlay = true
             return true
@@ -386,8 +405,8 @@ Function videoCanDirectPlay(mediaItem) As Boolean
         ' TODO: What exactly should we check here?
 
         ' Based on docs, only WMA9.2 is supported for audio
-        if Left(mediaItem.audioCodec, 3) <> "wma" then
-            Debug("videoCanDirectPlay: ac not wmav2")
+        if stereoCodec = invalid OR Left(stereoCodec, 3) <> "wma" then
+            Debug("videoCanDirectPlay: ac not stereo wmav2")
             return false
         end if
 
